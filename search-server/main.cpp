@@ -109,7 +109,8 @@ public:
     vector<Document> documents;
     for (const auto &item : matched_documents) {
         // int document_id, DocumentStatus status, int rating
-      if (document_filter(item.id, documents_.at(item.id).status, item.rating))
+      if (documents_.count(item.id) > 0 && document_filter(
+              item.id, documents_.at(item.id).status, item.rating))
           documents.push_back(item);
       if (documents.size() >= MAX_RESULT_DOCUMENT_COUNT)
         break;
