@@ -84,8 +84,17 @@ public:
           return status == DocumentStatus::ACTUAL;
         });
   }
-  template <typename F>
-  vector<Document> FindTopDocuments(const string &raw_query, F f) const {
+
+  vector<Document> FindTopDocuments(const string &raw_query,
+                                    DocumentStatus status) const {
+    return FindTopDocuments(
+        raw_query, [status](int document_id, DocumentStatus document_status,
+                            int rating) { return document_status == status; });
+  }
+
+  template <typename DocumentFilter>
+  vector<Document> FindTopDocuments(const string &raw_query,
+                                    DocumentFilter document_filter) const {
     const Query query = ParseQuery(raw_query);
     auto matched_documents = FindAllDocuments(query);
 
@@ -99,15 +108,9 @@ public:
          });
     vector<Document> documents;
     for (const auto &item : matched_documents) {
-      if constexpr (is_same_v<F, DocumentStatus>) {
-        if (documents_.end() != documents_.find(item.id) &&
-            f == documents_.at(item.id).status)
-          documents.push_back(item);
-      } else {
         // int document_id, DocumentStatus status, int rating
-        if (f(item.id, documents_.at(item.id).status, item.rating))
+      if (document_filter(item.id, documents_.at(item.id).status, item.rating))
           documents.push_back(item);
-      }
       if (documents.size() >= MAX_RESULT_DOCUMENT_COUNT)
         break;
     }
