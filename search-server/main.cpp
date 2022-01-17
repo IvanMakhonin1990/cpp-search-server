@@ -78,6 +78,7 @@ public:
     documents_.emplace(document_id,
                        DocumentData{ComputeAverageRating(ratings), status});
   }
+  
   vector<Document> FindTopDocuments(const string &raw_query) const {
     return FindTopDocuments(
         raw_query, [](int document_id, DocumentStatus status, int rating) {
@@ -96,7 +97,7 @@ public:
   vector<Document> FindTopDocuments(const string &raw_query,
                                     DocumentFilter document_filter) const {
     const Query query = ParseQuery(raw_query);
-    auto matched_documents = FindAllDocuments(query);
+    auto matched_documents = FindAllDocuments(query, document_filter);
 
     sort(matched_documents.begin(), matched_documents.end(),
          [](const Document &lhs, const Document &rhs) {
@@ -106,16 +107,10 @@ public:
              return lhs.relevance > rhs.relevance;
            }
          });
-    vector<Document> documents;
-    for (const auto &item : matched_documents) {
-        // int document_id, DocumentStatus status, int rating
-      if (documents_.count(item.id) > 0 && document_filter(
-              item.id, documents_.at(item.id).status, item.rating))
-          documents.push_back(item);
-      if (documents.size() >= MAX_RESULT_DOCUMENT_COUNT)
-        break;
-    }
-    return documents;
+    if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT)
+      matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
+
+    return matched_documents;
   }
 
   int GetDocumentCount() const { return documents_.size(); }
@@ -221,8 +216,9 @@ private:
                word_to_document_freqs_.at(word).size());
   }
 
-  vector<Document>
-  FindAllDocuments(const Query &query /*, DocumentStatus status*/) const {
+  template <typename DocumentFilter>
+  vector<Document> FindAllDocuments(const Query &query,
+                                    DocumentFilter document_filter) const {
     map<int, double> document_to_relevance;
     for (const string &word : query.plus_words) {
       if (word_to_document_freqs_.count(word) == 0) {
@@ -248,12 +244,20 @@ private:
 
     vector<Document> matched_documents;
     for (const auto [document_id, relevance] : document_to_relevance) {
-      matched_documents.push_back(
-          {document_id, relevance, documents_.at(document_id).rating});
+      if (documents_.count(document_id) > 0) {
+        const auto &item = documents_.at(document_id);
+        if (document_filter(document_id, item.status,
+                            item.rating))
+          matched_documents.push_back(
+              {document_id, relevance, item.rating});
+      } else
+        cout << "Document data for document with id = " << document_id
+             << "is missing" << endl;
     }
     return matched_documents;
   }
 };
+
 
 // ==================== для примера =========================
 
