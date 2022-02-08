@@ -434,27 +434,26 @@ void TestMatchingDocuments() {
                        {1, 2, 3});
     //tuple<vector<string>, DocumentStatus> matched_docs =
     {
-      auto [documents, status] = server.MatchDocument("in"s, 42);
-      ASSERT_EQUAL(1U, documents.size());
-      ASSERT_EQUAL("in", documents[0]);
+      auto [words, status] = server.MatchDocument("in"s, 42);
+      ASSERT_EQUAL(1U, words.size());
+      ASSERT_EQUAL("in", words[0]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
     }
     
     {
-      auto [documents, status] = server.MatchDocument("in cat dog"s, 42);
-      ASSERT_EQUAL(2U, documents.size());
-      ASSERT_EQUAL("cat", documents[0]);
-      ASSERT_EQUAL("in", documents[1]);
+      auto [words, status] = server.MatchDocument("in cat dog"s, 42);
+      ASSERT_EQUAL(2U, words.size());
+      ASSERT_EQUAL("cat", words[0]);
+      ASSERT_EQUAL("in", words[1]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
     }
     ASSERT(get<0>(server.MatchDocument("dog"s, 42)).empty());
 
     {
-      auto [documents, status] =
-          server.MatchDocument("dog  cat in -night"s, 42);
-      ASSERT_EQUAL(2U, documents.size());
-      ASSERT_EQUAL("cat", documents[0]);
-      ASSERT_EQUAL("in", documents[1]);
+      auto [words, status] = server.MatchDocument("dog  cat in -night"s, 42);
+      ASSERT_EQUAL(2U, words.size());
+      ASSERT_EQUAL("cat", words[0]);
+      ASSERT_EQUAL("in", words[1]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
     }
 
@@ -463,14 +462,12 @@ void TestMatchingDocuments() {
     server.AddDocument(43, "cat in cat the city night"s, DocumentStatus::BANNED,
                        {1, 2, 3, 4});
     {
-      auto [documents, status] = server.MatchDocument("cat city"s, 43);
-      ASSERT_EQUAL(2U, documents.size());
-      ASSERT_EQUAL("cat", documents[0]);
-      ASSERT_EQUAL("city", documents[1]);
+      auto [words, status] = server.MatchDocument("cat city"s, 43);
+      ASSERT_EQUAL(2U, words.size());
+      ASSERT_EQUAL("cat", words[0]);
+      ASSERT_EQUAL("city", words[1]);
       ASSERT_EQUAL(DocumentStatus::BANNED, status);
     }
-
-    ASSERT(get<0>(server.MatchDocument("cat in -city"s, 42)).empty());
   }
 }
 
@@ -498,40 +495,15 @@ void TestRelevanceSort() {
     const auto found_docs = server.FindTopDocuments("in"s);
     ASSERT_EQUAL(5U, found_docs.size());
     
-    auto hint_string_function = [](vector<Document> found_docs) {
-      std::stringstream ss;
-      vector<double> relevances_vector;
-      for (const auto &d : found_docs) {
-        relevances_vector.push_back(d.relevance);
-      }
-      ss << relevances_vector;
-      string msg = "Current order for relevance's sorting is: "s + ss.str();
-      sort(found_docs.begin(), found_docs.end(),
-           [](const Document &lhs, const Document &rhs) {
-             if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
-                return lhs.rating > rhs.rating;
-             } else {
-                return lhs.relevance > rhs.relevance;
-             }
-           });
-      ss.str(string());
-      relevances_vector.clear();
-      for (const auto &d : found_docs) {
-        relevances_vector.push_back(d.relevance);
-      }
-      ss << relevances_vector;
-      string current_relevance_order = ss.str();
-      return msg + ". But required order is: "s + ss.str();
-    };
-    ASSERT_HINT(is_sorted(found_docs.begin(), found_docs.end(),
-                          [](const Document &lhs, const Document &rhs) {
-                            if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
-                              return lhs.rating > rhs.rating;
-                            } else {
-                              return lhs.relevance > rhs.relevance;
-                            }
-                          }),
-                hint_string_function(found_docs));
+    ASSERT_EQUAL(2u, found_docs[0].id);
+    ASSERT_EQUAL(5u, found_docs[1].id);
+    ASSERT_EQUAL(1u, found_docs[2].id);
+    ASSERT_EQUAL(4u, found_docs[3].id);
+    ASSERT_EQUAL(0u, found_docs[4].id);
+
+    for (int i = 0; i < static_cast<int>(found_docs.size())-1; ++i) {
+      ASSERT(found_docs[i].relevance >= found_docs[i + 1].relevance);
+    }
   }
 }
 template <class T> double average(const T &doc3) {
@@ -561,7 +533,7 @@ void TestAverageValueOfRaiting() {
     ASSERT_EQUAL(average(doc1), found_docs[1].rating);
   }
 }
-void TestSearchingOfDocumentsByStatusStatus() {
+void TestSearchingOfDocumentsByStatus() {
   {
     SearchServer server;
     server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
@@ -588,57 +560,25 @@ void TestSearchingOfDocumentsByStatusStatus() {
   }
 }
 
-void TestValuesOfRelevance() {
-  {
+void TestCalculateRelevance() {
     SearchServer server;
-    server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
-                       {1, 2, 3, 6});
-    server.AddDocument(1, "cat in the in in in in city night"s,
-                       DocumentStatus::ACTUAL, {1, 2, 3, 4, 9, 8, 7, 6, 5});
     server.AddDocument(2,
                        "super cat in in in in in in the in in in city night"s,
                        DocumentStatus::ACTUAL,
                        {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
-    server.AddDocument(3, "dog in the city"s, DocumentStatus::ACTUAL,
-                       {10, 2, 3, 1});
-    server.AddDocument(4, "dog in the in in city in night"s,
-                       DocumentStatus::ACTUAL, {1, 20, 3, 1, 1, 4, 1, 10});
-    server.AddDocument(5, "super dog in city night"s, DocumentStatus::ACTUAL,
-                       {1, 2, 3, 40});
     server.AddDocument(6, "super dog city night"s, DocumentStatus::ACTUAL,
                        {1, 2, 30, 4, 5});
     const auto found_docs = server.FindTopDocuments("in"s);
-    ASSERT_EQUAL(5U, found_docs.size());
-    ASSERT(fabs(found_docs[0].relevance - log(7.0 / 6.0) * 9.0 / 14.0) < 1e-6);
-
-    SearchServer search_server;
-    search_server.SetStopWords("и в на"s);
-
-    search_server.AddDocument(0, "белый кот и модный ошейник"s,
-                              DocumentStatus::ACTUAL, {8, -3});
-    search_server.AddDocument(1, "пушистый кот пушистый хвост"s,
-                              DocumentStatus::ACTUAL, {7, 2, 7});
-    search_server.AddDocument(2, "ухоженный пёс выразительные глаза"s,
-                              DocumentStatus::ACTUAL, {5, -12, 2, 1});
-    search_server.AddDocument(3, "ухоженный скворец евгений"s,
-                              DocumentStatus::BANNED, {9});
-    auto r = search_server.FindTopDocuments("пушистый ухоженный кот"s);
-    ASSERT(fabs(r[0].relevance - (log(4.0 / 1.0) * 0.5 + log(4.0 / 2.0) * 0.25)) <
-           1e-6);
+    ASSERT_EQUAL(1u, found_docs.size());
+    ASSERT(fabs(found_docs[0].relevance - log(2.0 / 1.0) * 9.0 / 14.0) < 1e-6);
   }
-}
 
 void TestFilterByPredicate() {
-  {
     SearchServer server;
     ASSERT(server
                .FindTopDocuments(
                    "test",
                    [](int document_id, DocumentStatus status, int rating) {
-                     int a = 0;
-                     a += document_id;
-                     a += rating;
-
                      return status == DocumentStatus::ACTUAL;
                    })
                .empty());
@@ -680,7 +620,6 @@ void TestFilterByPredicate() {
         });
     ASSERT_EQUAL(1u, found_docs.size());
     ASSERT_EQUAL(73, found_docs[0].id);
-  }
 }
 
 void TestSearchServer() {
@@ -690,8 +629,8 @@ void TestSearchServer() {
   RUN_TEST(TestMatchingDocuments);
   RUN_TEST(TestRelevanceSort);
   RUN_TEST(TestAverageValueOfRaiting);
-  RUN_TEST(TestSearchingOfDocumentsByStatusStatus);
-  RUN_TEST(TestValuesOfRelevance);
+  RUN_TEST(TestSearchingOfDocumentsByStatus);
+  RUN_TEST(TestCalculateRelevance);
   RUN_TEST(TestFilterByPredicate);
 }
 
