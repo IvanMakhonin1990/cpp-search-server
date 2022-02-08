@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <sstream>
 
 using namespace std;
 
@@ -431,36 +432,43 @@ void TestMatchingDocuments() {
 
     server.AddDocument(42, "cat in the city"s, DocumentStatus::REMOVED,
                        {1, 2, 3});
-    tuple<vector<string>, DocumentStatus> matched_docs =
-        server.MatchDocument("in"s, 42);
-    ASSERT_EQUAL(1U, get<0>(matched_docs).size());
-    ASSERT_EQUAL("in", get<0>(matched_docs)[0]);
-    ASSERT_EQUAL(DocumentStatus::REMOVED, get<1>(matched_docs));
+    //tuple<vector<string>, DocumentStatus> matched_docs =
+    {
+      auto [documents, status] = server.MatchDocument("in"s, 42);
+      ASSERT_EQUAL(1U, documents.size());
+      ASSERT_EQUAL("in", documents[0]);
+      ASSERT_EQUAL(DocumentStatus::REMOVED, status);
+    }
+    
+    {
+      auto [documents, status] = server.MatchDocument("in cat dog"s, 42);
+      ASSERT_EQUAL(2U, documents.size());
+      ASSERT_EQUAL("cat", documents[0]);
+      ASSERT_EQUAL("in", documents[1]);
+      ASSERT_EQUAL(DocumentStatus::REMOVED, status);
+    }
+    ASSERT(get<0>(server.MatchDocument("dog"s, 42)).empty());
 
-    matched_docs = server.MatchDocument("in cat dog"s, 42);
-    ASSERT_EQUAL(2U, get<0>(matched_docs).size());
-    ASSERT_EQUAL("cat", get<0>(matched_docs)[0]);
-    ASSERT_EQUAL("in", get<0>(matched_docs)[1]);
-    ASSERT_EQUAL(DocumentStatus::REMOVED, get<1>(matched_docs));
-
-    matched_docs = server.MatchDocument("dog"s, 42);
-    ASSERT(get<0>(matched_docs).empty());
-
-    matched_docs = server.MatchDocument("dog  cat in -night"s, 42);
-    ASSERT_EQUAL(2U, get<0>(matched_docs).size());
-    ASSERT_EQUAL("cat", get<0>(matched_docs)[0]);
-    ASSERT_EQUAL("in", get<0>(matched_docs)[1]);
-    ASSERT_EQUAL(DocumentStatus::REMOVED, get<1>(matched_docs));
+    {
+      auto [documents, status] =
+          server.MatchDocument("dog  cat in -night"s, 42);
+      ASSERT_EQUAL(2U, documents.size());
+      ASSERT_EQUAL("cat", documents[0]);
+      ASSERT_EQUAL("in", documents[1]);
+      ASSERT_EQUAL(DocumentStatus::REMOVED, status);
+    }
 
     ASSERT(get<0>(server.MatchDocument("in -city"s, 42)).empty());
 
     server.AddDocument(43, "cat in cat the city night"s, DocumentStatus::BANNED,
                        {1, 2, 3, 4});
-    matched_docs = server.MatchDocument("cat city"s, 43);
-    ASSERT_EQUAL(2U, get<0>(matched_docs).size());
-    ASSERT_EQUAL("cat", get<0>(matched_docs)[0]);
-    ASSERT_EQUAL("city", get<0>(matched_docs)[1]);
-    ASSERT_EQUAL(DocumentStatus::BANNED, get<1>(matched_docs));
+    {
+      auto [documents, status] = server.MatchDocument("cat city"s, 43);
+      ASSERT_EQUAL(2U, documents.size());
+      ASSERT_EQUAL("cat", documents[0]);
+      ASSERT_EQUAL("city", documents[1]);
+      ASSERT_EQUAL(DocumentStatus::BANNED, status);
+    }
 
     ASSERT(get<0>(server.MatchDocument("cat in -city"s, 42)).empty());
   }
@@ -489,25 +497,53 @@ void TestRelevanceSort() {
                        DocumentStatus::ACTUAL, {1, 2, 30, 40});
     const auto found_docs = server.FindTopDocuments("in"s);
     ASSERT_EQUAL(5U, found_docs.size());
-    ASSERT(is_sorted(found_docs.begin(), found_docs.end(),
-                     [](const Document &lhs, const Document &rhs) {
-                       if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
-                         return lhs.rating > rhs.rating;
-                       } else {
-                         return lhs.relevance > rhs.relevance;
-                       }
-                     }));
+    
+    auto hint_string_function = [](vector<Document> found_docs) {
+      std::stringstream ss;
+      vector<double> relevances_vector;
+      for (const auto &d : found_docs) {
+        relevances_vector.push_back(d.relevance);
+      }
+      ss << relevances_vector;
+      string msg = "Current order for relevance's sorting is: "s + ss.str();
+      sort(found_docs.begin(), found_docs.end(),
+           [](const Document &lhs, const Document &rhs) {
+             if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                return lhs.rating > rhs.rating;
+             } else {
+                return lhs.relevance > rhs.relevance;
+             }
+           });
+      ss.str(string());
+      relevances_vector.clear();
+      for (const auto &d : found_docs) {
+        relevances_vector.push_back(d.relevance);
+      }
+      ss << relevances_vector;
+      string current_relevance_order = ss.str();
+      return msg + ". But required order is: "s + ss.str();
+    };
+    ASSERT_HINT(is_sorted(found_docs.begin(), found_docs.end(),
+                          [](const Document &lhs, const Document &rhs) {
+                            if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                              return lhs.rating > rhs.rating;
+                            } else {
+                              return lhs.relevance > rhs.relevance;
+                            }
+                          }),
+                hint_string_function(found_docs));
   }
 }
-template <class T> double average(T &doc3) {
+template <class T> double average(const T &doc3) {
   int s = 0;
-  for (const auto &item : doc3)
+  for (const auto &item : doc3) {
     s += item;
+  }
   s /= static_cast<int>(doc3.size());
   return s;
 }
 
-void TestRaiting() {
+void TestAverageValueOfRaiting() {
   {
     SearchServer server;
     auto doc0 = {1, 2, 3, 6};
@@ -519,77 +555,21 @@ void TestRaiting() {
     server.AddDocument(2,
                        "super cat in in in in in in the in in in city night"s,
                        DocumentStatus::ACTUAL, doc2);
-    auto doc3 = {-10, 2, 3, 1};
-    server.AddDocument(3, "dog in the city"s, DocumentStatus::ACTUAL, doc3);
-    auto doc4 = {1, 20, 3, 1, 1, 4, 1, 10};
-    server.AddDocument(4, "dog in the in in city in night"s,
-                       DocumentStatus::ACTUAL, doc4);
-    auto doc5 = {1, 2, 3, 40};
-    server.AddDocument(5, "super dog in city night"s, DocumentStatus::ACTUAL,
-                       doc5);
-    auto doc6 = {1, 2, 30, 4, 5};
-    server.AddDocument(6, "super dog city night"s, DocumentStatus::ACTUAL,
-                       doc6);
     const auto found_docs = server.FindTopDocuments("in"s);
-    ASSERT_EQUAL(5U, found_docs.size());
+    ASSERT_EQUAL(3u, found_docs.size());
     ASSERT_EQUAL(average(doc2), found_docs[0].rating);
+    ASSERT_EQUAL(average(doc1), found_docs[1].rating);
   }
 }
-void TestStatus() {
+void TestSearchingOfDocumentsByStatusStatus() {
   {
     SearchServer server;
     server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
                        {1, 2, 3, 6});
-    server.AddDocument(20, "cat in in city"s, DocumentStatus::ACTUAL,
-                       {1, 2, 3, 60});
-    server.AddDocument(21, "in in cat in in city1 in in"s,
-                       DocumentStatus::ACTUAL, {1, 12, 3, 6});
-    server.AddDocument(22, "cat in in in in city2 in in"s,
-                       DocumentStatus::ACTUAL, {1, 2, 3, -6});
-    server.AddDocument(23, "cat in in in in city3"s, DocumentStatus::ACTUAL,
-                       {1, 2, 13, 6});
-    server.AddDocument(24, "cat in in in city4"s, DocumentStatus::ACTUAL,
-                       {1, 2, 3, -6});
-    server.AddDocument(1, "cat in the in in in in city night"s,
-                       DocumentStatus::ACTUAL, {1, 2, 3, 4, 9, 8, 7, 6, 5});
-    server.AddDocument(2,
-                       "super cat in in in in in in the in in in city night"s,
-                       DocumentStatus::ACTUAL,
-                       {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
     server.AddDocument(3, "dog in the city"s, DocumentStatus::BANNED,
                        {10, 2, 3, 1});
-    server.AddDocument(31, "dog in the city2 banned"s, DocumentStatus::BANNED,
-                       {10, 2, 3, 1});
-    server.AddDocument(32, "dog in the banned city banned"s,
-                       DocumentStatus::BANNED, {10, 2, 3, 1});
-    server.AddDocument(33, "banned dog banned in the city banned"s,
-                       DocumentStatus::BANNED, {10, 2, 3, 1});
-    server.AddDocument(
-        34,
-        "dog banned in banned the banned in banned in bannedcity  in night"s,
-        DocumentStatus::ACTUAL, {1, 20, 3, 1, 1, 4, 1, 10});
-    server.AddDocument(
-        34,
-        "dog banned in banned the banned in banned in bannedcity  in night"s,
-        DocumentStatus::ACTUAL, {1, 20, 3, 1, 1, 4, 1, 10});
-    server.AddDocument(35, "super dog in city night"s, DocumentStatus::BANNED,
-                       {1, 2, 3, 40});
-
     server.AddDocument(6, "super dog city night IRRELEVANT"s,
                        DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(61, "super IRRELEVANT dog IRRELEVANT city night"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(62, "super IRRELEVANT dog city IRRELEVANT night"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(63,
-                       "super IRRELEVANT dog city IRRELEVANT night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(64,
-                       "super do IRRELEVANTg city IRRELEVANT night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(
-        65, "super do IRRELEVANTg city IRRELEVANT night IRRELEVANT cat"s,
-        DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
 
     auto found_docs =
         server.FindTopDocuments("IRRELEVANT"s, DocumentStatus::REMOVED);
@@ -597,39 +577,18 @@ void TestStatus() {
 
     found_docs =
         server.FindTopDocuments("IRRELEVANT"s, DocumentStatus::IRRELEVANT);
-    ASSERT_EQUAL(5U, found_docs.size());
-    ASSERT_EQUAL(63, found_docs[0].id);
-    ASSERT_EQUAL(61, found_docs[1].id);
-    ASSERT_EQUAL(62, found_docs[2].id);
-    ASSERT_EQUAL(64, found_docs[3].id);
-    ASSERT_EQUAL(65, found_docs[4].id);
+    ASSERT_EQUAL(1U, found_docs.size());
+    ASSERT_EQUAL(6, found_docs[0].id);
 
     server.AddDocument(7, "super dog city night REMOVED"s,
                        DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(71, "super REMOVED dog REMOVED city night"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(72, "super REMOVED dog city REMOVED night"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(73, "super REMOVED dog city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(74, "super do REMOVED g city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(75, "super do REMOVED g city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(76,
-                       "super super do REMOVED g city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
     found_docs = server.FindTopDocuments("REMOVED"s, DocumentStatus::REMOVED);
-    ASSERT_EQUAL(5U, found_docs.size());
-    ASSERT_EQUAL(73, found_docs[0].id);
-    ASSERT_EQUAL(74, found_docs[1].id);
-    ASSERT_EQUAL(75, found_docs[2].id);
-    ASSERT_EQUAL(71, found_docs[3].id);
-    ASSERT_EQUAL(72, found_docs[4].id);
+    ASSERT_EQUAL(1u, found_docs.size());
+    ASSERT_EQUAL(7, found_docs[0].id);
   }
 }
 
-void TestRelevance() {
+void TestValuesOfRelevance() {
   {
     SearchServer server;
     server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
@@ -650,7 +609,7 @@ void TestRelevance() {
                        {1, 2, 30, 4, 5});
     const auto found_docs = server.FindTopDocuments("in"s);
     ASSERT_EQUAL(5U, found_docs.size());
-    ASSERT(fabs(found_docs[0].relevance - 0.099096865603237494) < 1e-6);
+    ASSERT(fabs(found_docs[0].relevance - log(7.0 / 6.0) * 9.0 / 14.0) < 1e-6);
 
     SearchServer search_server;
     search_server.SetStopWords("и в на"s);
@@ -664,7 +623,8 @@ void TestRelevance() {
     search_server.AddDocument(3, "ухоженный скворец евгений"s,
                               DocumentStatus::BANNED, {9});
     auto r = search_server.FindTopDocuments("пушистый ухоженный кот"s);
-    ASSERT(fabs(r[0].relevance - 0.866434) < 1e-6);
+    ASSERT(fabs(r[0].relevance - (log(4.0 / 1.0) * 0.5 + log(4.0 / 2.0) * 0.25)) <
+           1e-6);
   }
 }
 
@@ -684,72 +644,24 @@ void TestFilterByPredicate() {
                .empty());
     server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
                        {1, 2, 3, 6});
-    server.AddDocument(20, "cat in in city"s, DocumentStatus::ACTUAL,
-                       {1, 2, 3, 4, 9, 8, 37, 6, 5});
-    server.AddDocument(21, "in in cat in in city1 in in"s,
-                       DocumentStatus::ACTUAL, {1, 2, 3, 4, 9, 83, 7, 6, 5});
-    server.AddDocument(22, "cat in in in in city2 in in"s,
-                       DocumentStatus::ACTUAL, {1, 2, 3, 4, 9, 28, 7, 6, 5});
-    server.AddDocument(23, "cat in in in in city3"s, DocumentStatus::ACTUAL,
-                       {1, 23, 3, 4, 9, 8, 7, 6, 5});
-    server.AddDocument(24, "cat in in in city4"s, DocumentStatus::ACTUAL,
-                       {1, 2, 3, 4, 9, 8, 7, 61, 5});
-    server.AddDocument(1, "cat in the in in in in city night"s,
-                       DocumentStatus::ACTUAL, {1, 2, 3, 4, 9, 8, 7, 6, 5});
-    server.AddDocument(2,
-                       "super cat in in in in in in the in in in city night"s,
-                       DocumentStatus::ACTUAL,
-                       {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+    
     server.AddDocument(3, "dog in the city"s, DocumentStatus::BANNED,
                        {10, 2, 3, 1});
-    server.AddDocument(31, "dog in the city2 banned"s, DocumentStatus::BANNED,
-                       {10, 2, 3, 1});
-    server.AddDocument(32, "dog in the banned city banned"s,
-                       DocumentStatus::BANNED, {10, 2, 3, 1});
-    server.AddDocument(33, "banned dog banned in the city banned"s,
-                       DocumentStatus::BANNED, {10, 2, 3, 1});
-    server.AddDocument(
-        34,
-        "dog banned in banned the banned in banned in bannedcity  in night"s,
-        DocumentStatus::ACTUAL, {1, 20, 3, 1, 1, 4, 1, 10});
-    server.AddDocument(
-        34,
-        "dog banned in banned the banned in banned in bannedcity  in night"s,
-        DocumentStatus::ACTUAL, {1, 20, 3, 1, 1, 4, 1, 10});
-    server.AddDocument(35, "super dog in city night"s, DocumentStatus::BANNED,
-                       {1, 2, 3, 40});
+    
+    ASSERT(server
+                   .FindTopDocuments(
+                       "IRRELEVANT",
+                       [](int document_id, DocumentStatus status, int rating) {
+                         return status == DocumentStatus::IRRELEVANT &&
+                                rating < 0 && document_id > 100;
+                       })
+                   .empty());
 
-    server.AddDocument(6, "super dog city night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, -300, 4, 5});
-    server.AddDocument(61, "super IRRELEVANT dog IRRELEVANT city night"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
     server.AddDocument(62, "super IRRELEVANT dog city IRRELEVANT night"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, -30000, 4, 5});
-    server.AddDocument(63,
-                       "super IRRELEVANT dog city IRRELEVANT night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 300, 4, 5});
-    server.AddDocument(64,
-                       "super do IRRELEVANTg city IRRELEVANT night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(
-        65, "super do IRRELEVANTg city IRRELEVANT night IRRELEVANT cat"s,
-        DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
 
-    server.AddDocument(164,
-                       "super do IRRELEVANTg city IRRELEVANT night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-    server.AddDocument(264,
-                       "super do IRRELEVANTg city IRRELEVANT night IRRELEVANT"s,
-                       DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
+                       DocumentStatus::IRRELEVANT, {1, 2, -30000, 4, 5}); 
 
     auto found_docs = server.FindTopDocuments(
-        "IRRELEVANT", [](int document_id, DocumentStatus status, int rating) {
-          return status == DocumentStatus::IRRELEVANT && rating < 0 &&
-                 document_id > 100;
-        });
-    ASSERT(found_docs.empty());
-
-    found_docs = server.FindTopDocuments(
         "IRRELEVANT", [](int document_id, DocumentStatus status, int rating) {
           return status == DocumentStatus::IRRELEVANT && rating < 0 &&
                  document_id > 60 && document_id < 70;
@@ -757,29 +669,16 @@ void TestFilterByPredicate() {
     ASSERT_EQUAL(1U, found_docs.size());
     ASSERT_EQUAL(62, found_docs[0].id);
     ASSERT_EQUAL(-5997, found_docs[0].rating);
-    ASSERT(fabs(0.337200 - found_docs[0].relevance) < 1.0e-6);
-
-    server.AddDocument(7, "super dog city night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(71, "super REMOVED dog REMOVED city night"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(72, "super REMOVED dog city REMOVED night"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
+    ASSERT(fabs(log(3.0 / 1.0) * 2.0 / 6.0 - found_docs[0].relevance) < 1.0e-6);
+    
     server.AddDocument(73, "super REMOVED dog city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(74, "super do REMOVED g city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(75, "super do REMOVED g city REMOVED night REMOVED"s,
-                       DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
-    server.AddDocument(76,
-                       "super super do REMOVED g city REMOVED night REMOVED"s,
                        DocumentStatus::REMOVED, {1, 2, 30, 4, 5});
     found_docs = server.FindTopDocuments(
         "REMOVED"s, [](int document_id, DocumentStatus status, int rating) {
           return status == DocumentStatus::REMOVED && rating > 0 &&
                  document_id > 70;
         });
-    ASSERT_EQUAL(5U, found_docs.size());
+    ASSERT_EQUAL(1u, found_docs.size());
     ASSERT_EQUAL(73, found_docs[0].id);
   }
 }
@@ -790,9 +689,9 @@ void TestSearchServer() {
   RUN_TEST(TestMinusWords);
   RUN_TEST(TestMatchingDocuments);
   RUN_TEST(TestRelevanceSort);
-  RUN_TEST(TestRaiting);
-  RUN_TEST(TestStatus);
-  RUN_TEST(TestRelevance);
+  RUN_TEST(TestAverageValueOfRaiting);
+  RUN_TEST(TestSearchingOfDocumentsByStatusStatus);
+  RUN_TEST(TestValuesOfRelevance);
   RUN_TEST(TestFilterByPredicate);
 }
 
