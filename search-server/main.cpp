@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <numeric>
 
 using namespace std;
 
@@ -76,13 +77,14 @@ enum class DocumentStatus {
 class SearchServer {
 public:
   inline static constexpr int INVALID_DOCUMENT_ID = -1;
+  inline static constexpr double TOLERANCE = 1.0e-6;
 
   template <typename StringContainer>
   explicit SearchServer(const StringContainer &stop_words)
       : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
     for (const auto &word : stop_words_) {
       if (!IsValidWord(word))
-        throw invalid_argument("Id of document is negative");
+        throw invalid_argument("Word: '" + word + "' in stop words is incorrect");
     }
   }
 
@@ -93,8 +95,11 @@ public:
 
   void AddDocument(int document_id, const string &document,
                    DocumentStatus status, const vector<int> &ratings) {
-    if ((document_id < 0) || (documents_.count(document_id) > 0)) {
+    if ((document_id < 0)) {
       throw invalid_argument("Id of document is negative");
+    }
+    if ((documents_.count(document_id) > 0)) {
+      throw invalid_argument(string("Document with id = %d is already exist"s, document_id));
     }
     vector<string> words = SplitIntoWordsNoStop(document);
 
@@ -116,7 +121,7 @@ public:
 
     sort(matched_documents.begin(), matched_documents.end(),
          [](const Document &lhs, const Document &rhs) {
-           if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+           if (abs(lhs.relevance - rhs.relevance) < TOLERANCE) {
              return lhs.rating > rhs.rating;
            } else {
              return lhs.relevance > rhs.relevance;
@@ -231,11 +236,7 @@ private:
     if (ratings.empty()) {
       return 0;
     }
-    int rating_sum = 0;
-    for (const int rating : ratings) {
-      rating_sum += rating;
-    }
-    return rating_sum / static_cast<int>(ratings.size());
+    return accumulate(ratings.begin(), ratings.end(), 0) / static_cast<int>(ratings.size());
   }
 
   struct QueryWord {
