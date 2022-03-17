@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+using namespace std;
+
 void PrintDocument(const Document &document) {
   cout << "{ "s
        << "document_id = "s << document.id << ", "s
@@ -49,7 +51,7 @@ void MatchDocuments(const SearchServer &search_server, const string &query) {
     cout << "Матчинг документов по запросу: "s << query << endl;
     const int document_count = search_server.GetDocumentCount();
     for (int index = 0; index < document_count; ++index) {
-      const int document_id = search_server.GetDocumentId(index);
+      const int document_id = *find(search_server.begin(), search_server.end(), index);
       const auto [words, status] =
           search_server.MatchDocument(query, document_id);
       PrintMatchDocumentResult(document_id, words, status);

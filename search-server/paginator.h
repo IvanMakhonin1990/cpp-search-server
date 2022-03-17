@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cassert>
+#include <algorithm>
 
 template <typename Iterator> class IteratorRange {
 public:
@@ -30,11 +31,11 @@ std::ostream &operator<<(std::ostream &out, const IteratorRange<Iterator> &range
 template <typename Iterator> class Paginator {
 public:
   Paginator(Iterator begin, Iterator end, size_t page_size) {
-    for (size_t left = distance(begin, end); left > 0;) {
+    for (size_t left = std::distance(begin, end); left > 0;) {
       assert(end >= begin);
       assert(page_size > 0);
-      const size_t current_page_size = min(page_size, left);
-      const Iterator current_page_end = next(begin, current_page_size);
+      const size_t current_page_size = std::min(page_size, left);
+      const Iterator current_page_end = std::next(begin, current_page_size);
       pages_.push_back({begin, current_page_end});
 
       left -= current_page_size;
@@ -49,7 +50,7 @@ public:
   size_t size() const { return pages_.size(); }
 
 private:
-  vector<IteratorRange<Iterator>> pages_;
+  std::vector<IteratorRange<Iterator>> pages_;
 };
 
 template <typename Container>

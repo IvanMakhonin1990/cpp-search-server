@@ -1,12 +1,13 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include <algorithm>
+#include <functional>
 #include <map>
 #include <set>
-#include <algorithm>
 #include <stdexcept>
-
+#include <string>
+#include <vector>
+#include <cmath>
 
 #include "document.h"
 #include "read_input_functions.h"
@@ -21,7 +22,8 @@ enum class DocumentStatus {
 };
 
 template <typename StringContainer>
-std::set<std::string> MakeUniqueNonEmptyStrings(const StringContainer &strings) {
+std::set<std::string>
+MakeUniqueNonEmptyStrings(const StringContainer &strings) {
   std::set<std::string> non_empty_strings;
   for (const std::string &str : strings) {
     if (!str.empty()) {
@@ -58,7 +60,7 @@ public:
 
     sort(matched_documents.begin(), matched_documents.end(),
          [](const Document &lhs, const Document &rhs) {
-           if (abs(lhs.relevance - rhs.relevance) < DOUBLE_TOLERANCE) {
+           if (std::abs(lhs.relevance - rhs.relevance) < DOUBLE_TOLERANCE) {
              return lhs.rating > rhs.rating;
            } else {
              return lhs.relevance > rhs.relevance;
@@ -72,16 +74,21 @@ public:
   }
 
   std::vector<Document> FindTopDocuments(const std::string &raw_query,
-                                    DocumentStatus status) const;
+                                         DocumentStatus status) const;
 
   std::vector<Document> FindTopDocuments(const std::string &raw_query) const;
 
   int GetDocumentCount() const;
 
-  int GetDocumentId(int index) const;
+  std::set<int>::const_iterator begin() const;
+  std::set<int>::const_iterator end() const;
 
-  std::tuple<std::vector<std::string>, DocumentStatus> MatchDocument(const std::string &raw_query,
-                                                      int document_id) const;
+  const std::map<std::string, double>&  GetWordFrequencies(int document_id) const;
+
+  void RemoveDocument(int document_id);
+
+  std::tuple<std::vector<std::string>, DocumentStatus>
+  MatchDocument(const std::string &raw_query, int document_id) const;
 
 private:
   static constexpr double DOUBLE_TOLERANCE = 1.0e-6;
@@ -91,8 +98,10 @@ private:
   };
   const std::set<std::string> stop_words_;
   std::map<std::string, std::map<int, double>> word_to_document_freqs_;
+  std::map<int, std::set<std::string>> doc_to_words_freqs_;
   std::map<int, DocumentData> documents_;
-  std::vector<int> document_ids_;
+  std::set<int> document_ids_;
+  static std::map<std::string, double> result;
 
   struct QueryWord {
     std::string data;
@@ -113,8 +122,9 @@ private:
   Query ParseQuery(const std::string &text) const;
   double ComputeWordInverseDocumentFreq(const std::string &word) const;
   template <typename DocumentPredicate>
-  std::vector<Document> FindAllDocuments(const SearchServer::Query &query,
-                                 DocumentPredicate document_predicate) const {
+  std::vector<Document>
+  FindAllDocuments(const SearchServer::Query &query,
+                   DocumentPredicate document_predicate) const {
     std::map<int, double> document_to_relevance;
     for (const std::string &word : query.plus_words) {
       if (word_to_document_freqs_.count(word) == 0) {
@@ -149,6 +159,3 @@ private:
     return matched_documents;
   }
 };
-
-
-

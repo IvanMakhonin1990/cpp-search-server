@@ -17,6 +17,12 @@
     <ClCompile Include="string_processing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="remove_duplicates.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="test_example_functions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">
@@ -43,6 +49,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="string_processing.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="remove_duplicates.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="test_example_functions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
