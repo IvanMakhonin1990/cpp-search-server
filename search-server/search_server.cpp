@@ -1,4 +1,4 @@
-#include "search_server.h"
+﻿#include "search_server.h"
 #include <cmath>
 #include <iostream>
 #include <numeric>
@@ -176,3 +176,4 @@ void SearchServer::RemoveDocument(int document_id) {
     doc_to_words_freqs_.erase(document_id);
   }
 }
+

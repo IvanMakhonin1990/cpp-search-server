@@ -9,12 +9,16 @@ void PrintMatchDocumentResult(int document_id,
                               const std::vector<std::string> &words,
                               DocumentStatus status);
 
-void AddDocument(SearchServer &search_server, int document_id,
-                 const std::string &document, DocumentStatus status,
-                 const std::vector<int> &ratings);
+std::vector<std::string> SplitIntoWords(const std::string &text);
 
-void FindTopDocuments(const SearchServer &search_server,
-                      const std::string &raw_query);
-
-void MatchDocuments(const SearchServer &search_server,
-                    const std::string &query);
+template <typename StringContainer>
+std::set<std::string>
+MakeUniqueNonEmptyStrings(const StringContainer &strings) {
+  std::set<std::string> non_empty_strings;
+  for (const std::string &str : strings) {
+    if (!str.empty()) {
+      non_empty_strings.insert(str);
+    }
+  }
+  return non_empty_strings;
+}

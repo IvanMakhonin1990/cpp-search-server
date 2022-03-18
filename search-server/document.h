@@ -1,6 +1,14 @@
 #pragma once
 #include <iostream>
 
+
+enum class DocumentStatus {
+  ACTUAL,
+  IRRELEVANT,
+  BANNED,
+  REMOVED,
+};
+
 struct Document {
   int id = 0;
   double relevance = 0.0;
