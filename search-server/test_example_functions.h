@@ -144,7 +144,7 @@ void TestSearchingOfDocumentsByStatus();
 
 void TestCalculateRelevance();
 
-void TestRemoveDocument();
+//void TestRemoveDocument();
 void PrintDocument(const Document &document);
 
 void TestLambda();

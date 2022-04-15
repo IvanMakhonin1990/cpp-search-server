@@ -14,7 +14,13 @@ ProcessQueries(const SearchServer &search_server,
               return search_server.FindTopDocuments(query);
             });
   return result;
-  /*for (const std::string &query : queries) {
-    documents_lists.push_back(search_server.FindTopDocuments(query));
-  }*/
+}
+
+vector<Document> ProcessQueriesJoined(const SearchServer &search_server,
+                                      const vector<string> &queries) {
+  vector<Document> result;
+  for (auto v : ProcessQueries(search_server, queries)) {
+    result.insert(result.end(), v.begin(), v.end());
+  }
+  return result;
 }
