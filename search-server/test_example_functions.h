@@ -10,10 +10,13 @@
 #include <utility>
 #include <vector>
 #include <sstream>
+#include <random>
 
 #include "search_server.h"
-#include "remove_duplicates.h"
+//#include "remove_duplicates.h"
 #include "string_processing.h"
+#include "log_duration.h"
+#include "process_queries.h"
 
 
 template <typename T, typename U>
@@ -92,6 +95,8 @@ template <typename T> void RunTestImpl(T &func, const std::string &func_name);
 
 #define RUN_TEST(func) RunTestImpl(func, #func)
 
+#define TEST(processor) Test(#processor, processor, search_server, queries)
+
 
 void AddDocument(SearchServer &search_server, int document_id,
                  const std::string &document, DocumentStatus status,
@@ -120,6 +125,18 @@ template <class T> double average(const T &doc3) {
   }
   s /= static_cast<int>(doc3.size());
   return s;
+}
+
+std::string GenerateWord(std::mt19937 &generator, int max_length);
+std::vector<std::string> GenerateDictionary(std::mt19937 &generator, int word_count, int max_length);
+std::string GenerateQuery(std::mt19937 &generator,const std::vector<std::string> &dictionary, int max_word_count);
+std::vector<std::string> GenerateQueries(std::mt19937 &generator,const std::vector<std::string> &dictionary, int query_count, int max_word_count);
+
+template <typename QueriesProcessor>
+void Test(std::string_view mark, QueriesProcessor processor,
+          const SearchServer &search_server, const std::vector<std::string> &queries) {
+  LOG_DURATION(std::string(mark));
+  const auto documents_lists = processor(search_server, queries);
 }
 
 void TestAverageValueOfRaiting();

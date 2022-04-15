@@ -67,6 +67,55 @@ void MatchDocuments(const SearchServer &search_server, const string &query) {
   }
 }
 
+string GenerateWord(mt19937 &generator, int max_length) {
+  const int length = 0;
+  uniform_int_distribution(1, max_length)(generator);
+  string word;
+  word.reserve(length);
+  for (int i = 0; i < length; ++i) {
+    word.push_back(uniform_int_distribution(static_cast<int>('a'),
+                                            static_cast<int> ('z'))(generator));
+  }
+  return word;
+}
+
+vector<string> GenerateDictionary(mt19937 &generator, int word_count,
+                                  int max_length) {
+  vector<string> words;
+  words.reserve(word_count);
+  for (int i = 0; i < word_count; ++i) {
+    words.push_back(GenerateWord(generator, max_length));
+  }
+  sort(words.begin(), words.end());
+  words.erase(unique(words.begin(), words.end()), words.end());
+  return words;
+}
+
+string GenerateQuery(mt19937 &generator, const vector<string> &dictionary,
+                     int max_word_count) {
+  const int word_count = uniform_int_distribution(1, max_word_count)(generator);
+  string query;
+  for (int i = 0; i < word_count; ++i) {
+    if (!query.empty()) {
+      query.push_back(' ');
+    }
+    query += dictionary[uniform_int_distribution<int>(0, static_cast<int>(dictionary.size() -
+                                                            1))(generator)];
+  }
+  return query;
+}
+
+vector<string> GenerateQueries(mt19937 &generator,
+                               const vector<string> &dictionary,
+                               int query_count, int max_word_count) {
+  vector<string> queries;
+  queries.reserve(query_count);
+  for (int i = 0; i < query_count; ++i) {
+    queries.push_back(GenerateQuery(generator, dictionary, max_word_count));
+  }
+  return queries;
+}
+
 
 
 void TestExcludeStopWordsFromAddedDocumentContent() {
@@ -341,37 +390,37 @@ void TestFilterByPredicate() {
   ASSERT_EQUAL(73, found_docs[0].id);
 }
 
-void TestRemoveDocument() {
-  SearchServer server(""s);
-  server.AddDocument(80, "cat in in city"s, DocumentStatus::ACTUAL,
-                     {1, 2, 3, 6});
-  server.AddDocument(70, "cat in in city"s, DocumentStatus::ACTUAL,
-                     {1, 2, 3, 6});
-  server.AddDocument(60, "cat in in city"s, DocumentStatus::ACTUAL,
-                     {1, 2, 3, 6});
-  server.AddDocument(50, "cat in in city"s, DocumentStatus::ACTUAL,
-                     {1, 2, 3, 6});
-  server.AddDocument(40, "dog in the city"s, DocumentStatus::BANNED,
-                     {10, 2, 3, 1});
-  server.AddDocument(30, "super dog city night IRRELEVANT"s,
-                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-  server.AddDocument(20, "super dog city night IRRELEVANT"s,
-                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-  server.AddDocument(10, "super dog city night IRRELEVANT"s,
-                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-  server.AddDocument(0, "super dog city night IRRELEVANT"s,
-                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
-  RemoveDuplicates(server);
-
-  auto found_docs =
-      server.FindTopDocuments("IRRELEVANT"s, DocumentStatus::REMOVED);
-  ASSERT(found_docs.empty());
-
-  found_docs =
-      server.FindTopDocuments("IRRELEVANT"s, DocumentStatus::IRRELEVANT);
-  ASSERT_EQUAL(1U, found_docs.size());
-  ASSERT_EQUAL(0, found_docs[0].id);
-}
+//void TestRemoveDocument() {
+//  SearchServer server(""s);
+//  server.AddDocument(80, "cat in in city"s, DocumentStatus::ACTUAL,
+//                     {1, 2, 3, 6});
+//  server.AddDocument(70, "cat in in city"s, DocumentStatus::ACTUAL,
+//                     {1, 2, 3, 6});
+//  server.AddDocument(60, "cat in in city"s, DocumentStatus::ACTUAL,
+//                     {1, 2, 3, 6});
+//  server.AddDocument(50, "cat in in city"s, DocumentStatus::ACTUAL,
+//                     {1, 2, 3, 6});
+//  server.AddDocument(40, "dog in the city"s, DocumentStatus::BANNED,
+//                     {10, 2, 3, 1});
+//  server.AddDocument(30, "super dog city night IRRELEVANT"s,
+//                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
+//  server.AddDocument(20, "super dog city night IRRELEVANT"s,
+//                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
+//  server.AddDocument(10, "super dog city night IRRELEVANT"s,
+//                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
+//  server.AddDocument(0, "super dog city night IRRELEVANT"s,
+//                     DocumentStatus::IRRELEVANT, {1, 2, 30, 4, 5});
+//  RemoveDuplicates(server);
+//
+//  auto found_docs =
+//      server.FindTopDocuments("IRRELEVANT"s, DocumentStatus::REMOVED);
+//  ASSERT(found_docs.empty());
+//
+//  found_docs =
+//      server.FindTopDocuments("IRRELEVANT"s, DocumentStatus::IRRELEVANT);
+//  ASSERT_EQUAL(1U, found_docs.size());
+//  ASSERT_EQUAL(0, found_docs[0].id);
+//}
 
 void TestLambda() {
   const std::vector<int> ratings1 = {1, 2, 3, 4, 5};
@@ -432,9 +481,24 @@ void TestLambda() {
   }
 }
 
+void TestParrallel() {
+  mt19937 generator;
+  const auto dictionary = GenerateDictionary(generator, 2000, 25);
+  const auto documents = GenerateQueries(generator, dictionary, 20000, 10);
+
+  SearchServer search_server(dictionary[0]);
+  for (size_t i = 0; i < documents.size(); ++i) {
+    search_server.AddDocument(i, documents[i], DocumentStatus::ACTUAL,
+                              {1, 2, 3});
+  }
+
+  const auto queries = GenerateQueries(generator, dictionary, 2'000, 7);
+  TEST(ProcessQueries);
+} 
+
 void TestSearchServer() {
   RUN_TEST(TestLambda);
-  RUN_TEST(TestRemoveDocument);
+  //RUN_TEST(TestRemoveDocument);
   RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
   RUN_TEST(TestAddDocumentContent);
   RUN_TEST(TestMinusWords);
@@ -444,4 +508,5 @@ void TestSearchServer() {
   RUN_TEST(TestSearchingOfDocumentsByStatus);
   RUN_TEST(TestCalculateRelevance);
   RUN_TEST(TestFilterByPredicate);
+  RUN_TEST(TestParrallel);
 }

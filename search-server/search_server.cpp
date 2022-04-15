@@ -3,6 +3,7 @@
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
+#include <execution>
 
 using namespace std;
 
@@ -176,4 +177,3 @@ void SearchServer::RemoveDocument(int document_id) {
     doc_to_words_freqs_.erase(document_id);
   }
 }
-
