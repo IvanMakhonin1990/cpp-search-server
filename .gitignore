@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+/search-server/.vs/Sprint1/v16/ipch/AutoPCH
+/search-server/.vs/Sprint1/v16
+/search-server/Debug
+/search-server/Sprint1.sln
+/search-server/Sprint1.vcxproj
+/search-server/Sprint1.vcxproj.user

@@ -165,7 +165,8 @@ void TestExcludeStopWordsFromAddedDocumentContent() {
 
   {
     SearchServer server("in the"s);
-    server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+    server.AddDocument(doc_id, "cat in the city"s, DocumentStatus::ACTUAL,
+                       ratings);
     ASSERT_HINT(server.FindTopDocuments("in"s).empty(),
                 "Stop words must be excluded from documents"s);
   }
@@ -721,12 +722,104 @@ void TestMatchDocs1() {
 
 } 
 
+
+void TestProcessQueries() {
+  {
+   /* SearchServer server(""s);
+
+    server.AddDocument(42, "cat in the city"s, DocumentStatus::REMOVED,
+                       {1, 2, 3});
+
+    vector<string> queries = {"in"s, "in cat dog"s, "dog",       "dog  cat in -night"s,
+                              "in -city"s, "cat city"s};*/
+    
+        {
+     SearchServer server(""s);
+     server.AddDocument(2,
+                        "super cat in in in in in in the in in in city night"s,
+                        DocumentStatus::ACTUAL,
+                        {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+     server.AddDocument(6, "super dog city night"s, DocumentStatus::ACTUAL,
+                        {1, 2, 30, 4, 5});
+     vector<string> q = {"in"};
+     auto result = ProcessQueries(server, q);
+     const auto found_docs = result[0];
+     ASSERT_EQUAL(1u, found_docs.size());
+     auto l = log(2.0 / 1.0) * 9.0 / 14.0;
+     ASSERT(fabs(found_docs[0].relevance - log(2.0 / 1.0) * 9.0 / 14.0) < 1e-6);
+   }
+
+    {
+      SearchServer server(""s);
+      ASSERT_EQUAL(0u, server.FindTopDocuments("in"s).size());
+      server.AddDocument(42, "cat in the city"s, DocumentStatus::ACTUAL,
+                         {1, 2, 3});
+      server.AddDocument(45, "dog at the village", DocumentStatus::ACTUAL,
+                         {1, 2, 35});
+      server.AddDocument(46, "dog in the village", DocumentStatus::ACTUAL,
+                         {1, 2, 3, 30});
+      server.AddDocument(47, "dog at the village", DocumentStatus::ACTUAL,
+                         {1, 2, 3, 20});
+      vector<string> q = {"in"};
+      auto result = ProcessQueries(server, q);
+      ASSERT_EQUAL(2u, result[0].size());
+    }
+    {
+      SearchServer server("the"s);
+      server.AddDocument(42, "cat in the city"s, DocumentStatus::ACTUAL,
+                         {1, 2, 3});
+      server.AddDocument(45, "dog at the village", DocumentStatus::ACTUAL,
+                         {1, 2, 35});
+      server.AddDocument(46, "dog in the village", DocumentStatus::ACTUAL,
+                         {1, 2, 3, 30});
+      server.AddDocument(47, "dog at the village", DocumentStatus::ACTUAL,
+                         {1, 2, 3, 20});
+      vector<string> q = {"in"};
+      auto result = ProcessQueries(server, q);
+      const auto found_docs = result[0];
+      ASSERT_EQUAL(2U, found_docs.size());
+      ASSERT_EQUAL(46, found_docs.at(0).id);
+      ASSERT_EQUAL(42, found_docs.at(1).id);
+    }
+    {
+      const int doc_id = 42;
+      const string content = "cat in the city"s;
+      const vector<int> ratings = {1, 2, 3};
+      {
+        SearchServer server(""s);
+        server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+        vector<string> q = {"in"};
+        auto result = ProcessQueries(server, q);
+        const auto found_docs = result[0];
+        ASSERT_EQUAL(found_docs.size(), 1u);
+        const Document &doc0 = found_docs[0];
+        ASSERT_EQUAL(doc0.id, doc_id);
+      }
+
+      {
+        string s = "in the";
+        string_view sw = string_view(s);
+        SearchServer server(sw);
+        s.clear();
+        server.AddDocument(doc_id, "cat in the city"s, DocumentStatus::ACTUAL,
+                           ratings);
+        vector<string> q = {"in"};
+        auto result = ProcessQueries(server, q);
+        const auto found_docs = result[0];
+        ASSERT_HINT(found_docs.empty(),
+                    "Stop words must be excluded from documents"s);
+      }
+    }
+  }
+}
+
 void TestSearchServer() {
+  RUN_TEST(TestProcessQueries);
   //RUN_TEST(TestParallelMatching);
   //RUN_TEST(TestPFromTask);
   
   RUN_TEST(TestLambda);
-  //RUN_TEST(TestRemoveDocument);
+  RUN_TEST(TestRemoveDocument);
   RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);
   RUN_TEST(TestAddDocumentContent);
   RUN_TEST(TestMinusWords);
