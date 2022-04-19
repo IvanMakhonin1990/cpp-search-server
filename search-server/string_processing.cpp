@@ -29,6 +29,9 @@ vector<string> SplitIntoWords(const string &text) {
   for (const char c : text) {
     if (c == ' ') {
       if (!word.empty()) {
+        if (word.empty()) {
+          continue;
+        }
         words.push_back(word);
         word.clear();
       }

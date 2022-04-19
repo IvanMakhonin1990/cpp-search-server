@@ -118,6 +118,8 @@ void TestMatchingDocuments();
 
 void TestRelevanceSort();
 
+void TestRemoveDocument();
+
 template <class T> double average(const T &doc3) {
   int s = 0;
   for (const auto &item : doc3) {
@@ -152,3 +154,5 @@ void TestLambda();
 
 
 void TestSearchServer();
+
+void TestMatchDocs1();

@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <execution>
+#include <unordered_set>
+#include <string_view>
 
 #include "document.h"
 #include "read_input_functions.h"
@@ -42,10 +45,26 @@ public:
 
   const std::map<std::string, double>&  GetWordFrequencies(int document_id) const;
 
-  void RemoveDocument(int document_id);
+  
+  void RemoveDocument(std::execution::parallel_policy policy, int document_id);
 
+  void RemoveDocument(std::execution::sequenced_policy policy, int document_id);
+
+  void RemoveDocument(int document_id);
+  
   std::tuple<std::vector<std::string>, DocumentStatus>
   MatchDocument(const std::string &raw_query, int document_id) const;
+
+  std::tuple<std::vector<std::string>, DocumentStatus>
+  MatchDocument(std::execution::sequenced_policy policy, const std::string &raw_query, int document_id) const;
+
+  std::tuple<std::vector<std::string>, DocumentStatus>
+  MatchDocument(std::execution::parallel_policy policy, const std::string &raw_query,
+                int document_id) const;
+
+  /*std::tuple<std::vector<std::string>, DocumentStatus>
+  MatchDocument1(std::execution::parallel_policy policy,
+                const std::string &raw_query, int document_id) const;*/
 
 private:
   static constexpr double DOUBLE_TOLERANCE = 1.0e-6;
@@ -65,6 +84,11 @@ private:
     bool is_minus;
     bool is_stop;
   };
+  struct QueryWord1 {
+    std::string_view data;
+    bool is_minus;
+    bool is_stop;
+  };
 
   struct Query {
     std::set<std::string> plus_words;
@@ -76,6 +100,7 @@ private:
   std::vector<std::string> SplitIntoWordsNoStop(const std::string &text) const;
   static int ComputeAverageRating(const std::vector<int> &ratings);
   QueryWord ParseQueryWord(const std::string &text) const;
+  QueryWord1 ParseQueryWord1(const std::string &text) const;
   Query ParseQuery(const std::string &text) const;
   double ComputeWordInverseDocumentFreq(const std::string &word) const;
   template <typename DocumentPredicate>
