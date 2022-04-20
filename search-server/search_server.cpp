@@ -165,7 +165,8 @@ bool SearchServer::IsValidWord(const string_view &word) {
 vector<string_view> SearchServer::SplitIntoWordsNoStop(const string_view &text) const {
   vector<string_view> words;
   for (const auto &word : SplitIntoWords(text)) {
-    if (!IsValidWord(word)) {
+    //if (word.empty() || word[0] == '-' || !IsValidWord(word))
+      if (!IsValidWord(word)) {
       throw invalid_argument("Word "s + string(word) + " is invalid"s);
     }
     if (!IsStopWord(word)) {
@@ -193,11 +194,10 @@ SearchServer::QueryWord SearchServer::ParseQueryWord(const string_view &text) co
     is_minus = true;
     word.remove_prefix(1);
   }
-  string w = string(word);
-  if (word.empty() || word[0] == '-' || !IsValidWord(w)) {
-    throw invalid_argument("Query word "s + text.data() + " is invalid");
+  if (word.empty() || word[0] == '-' || !IsValidWord(word)) {
+    throw invalid_argument("Query word "s + string(word) + " is invalid");
   }
-  return {word, is_minus, IsStopWord(w)};
+  return {word, is_minus, IsStopWord(word)};
 }
 
 SearchServer::Query SearchServer::ParseQuery(const string_view &text,

@@ -29,9 +29,11 @@ template <typename T> void RunTestImpl(T &func, const string &func_name) {
 
 void AddDocument(SearchServer &search_server, int document_id,
                  const string &document, DocumentStatus status,
-                 const vector<int> &ratings) {
+                 const vector<int> &ratings, bool skip_assert) {
   try {
     search_server.AddDocument(document_id, document, status, ratings);
+    cout << skip_assert << endl;
+    ASSERT_HINT(skip_assert, "This should never happen in AddDocument");
   } catch (const invalid_argument &e) {
     cout << "Ошибка добавления документа "s << document_id << ": "s << e.what()
          << endl;
@@ -39,28 +41,31 @@ void AddDocument(SearchServer &search_server, int document_id,
 }
 
 void FindTopDocuments(const SearchServer &search_server,
-                      const string &raw_query) {
+                      const string &raw_query, bool skip_assert) {
   cout << "Результаты поиска по запросу: "s << raw_query << endl;
   try {
     for (const Document &document : search_server.FindTopDocuments(raw_query)) {
       PrintDocument(document);
     }
+    ASSERT_HINT(skip_assert, "This should never happen");
   } catch (const invalid_argument &e) {
     cout << "Ошибка поиска: "s << e.what() << endl;
   }
 }
 
-void MatchDocuments(const SearchServer &search_server, const string &query) {
+void MatchDocuments(const SearchServer &search_server, const string &query,
+                    bool skip_assert) {
   try {
     cout << "Матчинг документов по запросу: "s << query << endl;
-    const int document_count = search_server.GetDocumentCount();
-    for (int index = 0; index < document_count; ++index) {
-      const int document_id =
-          *find(search_server.begin(), search_server.end(), index);
+    //const int document_count = search_server.GetDocumentCount();
+    //for (int index = 0; index < document_count; ++index) {
+    for (auto it : search_server){
+      //auto document_id = find(search_server.begin(), search_server.end(), index);
       const auto [words, status] =
-          search_server.MatchDocument(query, document_id);
-      PrintMatchDocumentResult(document_id, words, status);
+          search_server.MatchDocument(query, it);
+      PrintMatchDocumentResult(it, words, status);
     }
+    ASSERT_HINT(skip_assert, "This should never happen");
   } catch (const invalid_argument &e) {
     cout << "Ошибка матчинга документов на запрос "s << query << ": "s
          << e.what() << endl;
@@ -288,32 +293,32 @@ void TestMatchingDocumentsP() {
     LOG_DURATION("MP");
     SearchServer server(""s);
 
-    server.AddDocument(42, "cat in the city"s, DocumentStatus::REMOVED,
+    server.AddDocument(42, "cat in-in the city"s, DocumentStatus::REMOVED,
                        {1, 2, 3});
     // tuple<vector<string>, DocumentStatus> matched_docs =
-    {
-      auto [words, status] = server.MatchDocument(""s, 42);
+    {//\x1d
+      auto [words, status] = server.MatchDocument(execution::par, "in-in in"s, 42);
       ASSERT_EQUAL(1U, words.size());
-      ASSERT_EQUAL("in", words[0]);
+      ASSERT_EQUAL("in-in", words[0]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
     }
 
     {
       auto [words, status] =
-          server.MatchDocument(execution::par, "in cat dog"s, 42);
+          server.MatchDocument(execution::par, "in-in cat dog"s, 42);
       ASSERT_EQUAL(2U, words.size());
       ASSERT_EQUAL("cat", words[0]);
-      ASSERT_EQUAL("in", words[1]);
+      ASSERT_EQUAL("in-in", words[1]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
     }
     ASSERT(get<0>(server.MatchDocument("dog"s, 42)).empty());
 
     {
       auto [words, status] =
-          server.MatchDocument(execution::par, "dog  cat in -night"s, 42);
+          server.MatchDocument(execution::par, "dog  cat in-in -night"s, 42);
       ASSERT_EQUAL(2U, words.size());
       ASSERT_EQUAL("cat", words[0]);
-      ASSERT_EQUAL("in", words[1]);
+      ASSERT_EQUAL("in-in", words[1]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
     }
 
@@ -834,11 +839,90 @@ void TestProcessQueries() {
   }
 }
 
+void TestExceptions() {
+  SearchServer search_server("и в на"s);
+
+  // Явно игнорируем результат метода AddDocument, чтобы избежать предупреждения
+  // о неиспользуемом результате его вызова
+  search_server.AddDocument(1, "пушис-тый кот пушистый хвост"s,
+                                  DocumentStatus::ACTUAL, {7, 2, 7});
+  try {
+      search_server.AddDocument(1, "пушистый пёс и модный ошейник"s,
+                                 DocumentStatus::ACTUAL, {1, 2});
+    ASSERT_HINT(false, "This should never happen");
+  } catch (invalid_argument const &ex) {
+    cout << ex.what() << endl;
+  }
+
+  try {
+      search_server.AddDocument(-1, "пушистый пёс и модный ошейник"s,
+                                 DocumentStatus::ACTUAL, {1, 2});
+    ASSERT_HINT(false, "This should never happen");
+  } catch (invalid_argument const& ex)
+  {
+    cout << "Wrong id in AddDocument: " << ex.what() << endl;
+  }
+
+  try {
+    search_server.AddDocument(3, "большой пёс скво\x12рец"s,
+                              DocumentStatus::ACTUAL, {1, 3, 2});
+    ASSERT_HINT(false, "This should never happen");
+  } catch (invalid_argument const &ex)
+  {
+    cout << "Wrong document text in AddDocument: " << ex.what() << endl;
+  }
+
+  try {
+    vector<Document> documents = search_server.FindTopDocuments("--пушистый"s);
+    ASSERT_HINT(false, "This should never happen");
+    for (const Document &document : documents) {
+      PrintDocument(document);
+    }
+  } catch (invalid_argument const &ex) {
+    cout << "Wrong query in FindTopDocuments: " << ex.what() << endl;
+  }
+
+  try {
+    vector<Document> documents = search_server.FindTopDocuments("-пушистый -"s);
+    ASSERT_HINT(false, "This should never happen");
+    for (const Document &document : documents) {
+      PrintDocument(document);
+    }
+  } catch (invalid_argument const &ex) {
+    cout << "Wrong query in FindTopDocuments: " << ex.what() << endl;
+  }
+
+  {
+    SearchServer search_server("и в на"s);
+
+    AddDocument(search_server, 1, "пушистый кот пушистый хвост"s,
+                DocumentStatus::ACTUAL, {7, 2, 7});
+    AddDocument(search_server, 1, "пушистый пёс и модный ошейник"s,
+                DocumentStatus::ACTUAL, {1, 2});
+    AddDocument(search_server, -1, "пушистый пёс и модный ошейник"s,
+                DocumentStatus::ACTUAL, {1, 2});
+    AddDocument(search_server, 3, "большой пёс скво\x12рец евгений"s,
+                DocumentStatus::ACTUAL, {1, 3, 2});
+    AddDocument(search_server, 4, "большой пёс скворец евгений"s,
+                DocumentStatus::ACTUAL, {1, 1, 1});
+
+    FindTopDocuments(search_server, "пушистый -пёс"s);
+    FindTopDocuments(search_server, "пушистый --кот"s, false);
+    FindTopDocuments(search_server, "пушистый -"s, false);
+
+    MatchDocuments(search_server, "пушистый пёс"s);
+    MatchDocuments(search_server, "модный -кот"s);
+    MatchDocuments(search_server, "модный --пёс"s, false);
+    MatchDocuments(search_server, "пушистый - хвост"s, false);
+  }
+} 
+
 void TestSearchServer() {
   //RUN_TEST(TestProcessQueries);
   //RUN_TEST(TestParallelMatching);
   //RUN_TEST(TestPFromTask);
   
+  RUN_TEST(TestExceptions);
   RUN_TEST(TestLambda);
   RUN_TEST(TestRemoveDocument);
   RUN_TEST(TestExcludeStopWordsFromAddedDocumentContent);

@@ -100,13 +100,13 @@ template <typename T> void RunTestImpl(T &func, const std::string &func_name);
 
 void AddDocument(SearchServer &search_server, int document_id,
                  const std::string &document, DocumentStatus status,
-                 const std::vector<int> &ratings);
+                 const std::vector<int> &ratings, bool skip_assert = true);
 
 void FindTopDocuments(const SearchServer &search_server,
-                      const std::string &raw_query);
+                      const std::string &raw_query, bool skip_assert=true);
 
-void MatchDocuments(const SearchServer &search_server,
-                    const std::string &query);
+void MatchDocuments(const SearchServer &search_server, const std::string &query,
+                    bool skip_assert = true);
 
 void TestExcludeStopWordsFromAddedDocumentContent();
 
@@ -156,3 +156,5 @@ void TestLambda();
 void TestSearchServer();
 
 void TestMatchDocs1();
+
+void TestExceptions();

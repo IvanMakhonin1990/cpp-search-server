@@ -30,21 +30,23 @@ vector<string_view> SplitIntoWords(const string_view &text) {
   auto it = text.begin();
   size_t count = 0;
   while (text.end() != it) {
-    if (*it == ' ' || it + 1 == text.end()) {
+    if (*it == ' ') {
       if (count > 0) {
-        if (text.end() == it + 1) {
-          ++count;
-        }
+        //(it + 1 == text.end()) ? (it + 1) : it
+        // = {begin, begin + count};
         string_view word = text.substr(distance(text.begin(), begin), count);
-        if (!word.empty()) {
-          words.push_back(word);
-        }
+        // if (!word.empty()) {
+        words.push_back(word);
+        //}
       }
       count = 0;
-      begin = it+1;
+      begin = it + 1;
 
     } else {
       ++count;
+      if (it + 1 == text.end()) {
+        words.push_back(text.substr(distance(text.begin(), begin), count));
+      }
     }
     ++it;
   }
