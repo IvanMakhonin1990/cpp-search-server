@@ -91,7 +91,7 @@ private:
   };
 
   bool IsStopWord(const std::string_view &word) const;
-  static bool IsValidWord(const std::string &word);
+  static bool IsValidWord(const std::string_view &word);
   std::vector<std::string_view> SplitIntoWordsNoStop(const std::string_view &text) const;
   static int ComputeAverageRating(const std::vector<int> &ratings);
   QueryWord ParseQueryWord(const std::string_view &text) const;

@@ -74,7 +74,6 @@ SearchServer::MatchDocument(execution::sequenced_policy policy,
 tuple<vector<string_view>, DocumentStatus>
 SearchServer::MatchDocument(execution::parallel_policy policy,
                             string_view raw_query, int document_id) const {
-
   auto words = SplitIntoWords(raw_query);
 
   vector<string_view> matched_words;
@@ -157,7 +156,7 @@ bool SearchServer::IsStopWord(const string_view &word) const {
   return stop_words_.count(word) > 0;
 }
 
-bool SearchServer::IsValidWord(const string &word) {
+bool SearchServer::IsValidWord(const string_view &word) {
   // A valid word must not contain special characters
   return none_of(word.begin(), word.end(),
                  [](char c) { return c >= '\0' && c < ' '; });
@@ -166,9 +165,8 @@ bool SearchServer::IsValidWord(const string &word) {
 vector<string_view> SearchServer::SplitIntoWordsNoStop(const string_view &text) const {
   vector<string_view> words;
   for (const auto &word : SplitIntoWords(text)) {
-    string w = string(word);
-    if (!IsValidWord(w)) {
-      throw invalid_argument("Word "s + w + " is invalid"s);
+    if (!IsValidWord(word)) {
+      throw invalid_argument("Word "s + string(word) + " is invalid"s);
     }
     if (!IsStopWord(word)) {
       words.push_back(word);
