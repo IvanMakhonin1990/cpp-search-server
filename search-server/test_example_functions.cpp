@@ -156,7 +156,8 @@ void TestExcludeStopWordsFromAddedDocumentContent() {
   const vector<int> ratings = {1, 2, 3};
   {
     SearchServer server(""s);
-    server.AddDocument(doc_id, content, DocumentStatus::ACTUAL, ratings);
+    server.AddDocument(doc_id, "cat in the city"s, DocumentStatus::ACTUAL,
+                       ratings);
     const auto found_docs = server.FindTopDocuments("in"s);
     ASSERT_EQUAL(found_docs.size(), 1u);
     const Document &doc0 = found_docs[0];
@@ -291,7 +292,7 @@ void TestMatchingDocumentsP() {
                        {1, 2, 3});
     // tuple<vector<string>, DocumentStatus> matched_docs =
     {
-      auto [words, status] = server.MatchDocument(execution::par, "in"s, 42);
+      auto [words, status] = server.MatchDocument(""s, 42);
       ASSERT_EQUAL(1U, words.size());
       ASSERT_EQUAL("in", words[0]);
       ASSERT_EQUAL(DocumentStatus::REMOVED, status);
@@ -629,8 +630,8 @@ void TestPFromTask() {
 
 void TestParallelMatching() {
   mt19937 generator;
-  const auto dictionary = GenerateDictionary(generator, 20000, 15);
-  const auto documents = GenerateQueries(generator, dictionary, 200000, 20);
+  const auto dictionary = GenerateDictionary(generator, 1000, 10);
+  const auto documents = GenerateQueries(generator, dictionary, 10000, 70);
 
   SearchServer search_server(dictionary[0]);
   for (size_t i = 0; i < documents.size(); ++i) {
@@ -638,7 +639,7 @@ void TestParallelMatching() {
                               {1, 2, 3});
   }
 
-  const auto queries = GenerateQueries(generator, dictionary, 2'000, 20);
+  const auto queries = GenerateQueries(generator, dictionary, 500, 0.1);
   {
     LOG_DURATION("Serial");
     for (auto q : queries) {
@@ -734,20 +735,40 @@ void TestProcessQueries() {
                               "in -city"s, "cat city"s};*/
     
         {
-     SearchServer server(""s);
-     server.AddDocument(2,
-                        "super cat in in in in in in the in in in city night"s,
-                        DocumentStatus::ACTUAL,
-                        {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
-     server.AddDocument(6, "super dog city night"s, DocumentStatus::ACTUAL,
-                        {1, 2, 30, 4, 5});
-     vector<string> q = {"in"};
-     auto result = ProcessQueries(server, q);
-     const auto found_docs = result[0];
+     auto f = []() {
+       SearchServer server(""s);
+       server.AddDocument(
+           2, "super cat in in in in in in the in in in city night"s,
+           DocumentStatus::ACTUAL,
+           {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+       server.AddDocument(6, "super dog city night"s, DocumentStatus::ACTUAL,
+                          {1, 2, 30, 4, 5});
+       vector<string> q = {"in"};
+       auto result = ProcessQueries(server, q);
+       return result[0];
+     };
+          const auto found_docs = f(); 
      ASSERT_EQUAL(1u, found_docs.size());
-     auto l = log(2.0 / 1.0) * 9.0 / 14.0;
      ASSERT(fabs(found_docs[0].relevance - log(2.0 / 1.0) * 9.0 / 14.0) < 1e-6);
    }
+        {
+          auto f = []() {
+            SearchServer server(""s);
+            server.AddDocument(
+                2, "super cat in in in in in in the in in in city night"s,
+                DocumentStatus::ACTUAL,
+                {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14});
+            server.AddDocument(6, "super dog city night"s,
+                               DocumentStatus::ACTUAL, {1, 2, 30, 4, 5});
+            return server;
+          };
+          vector<string> q = {"in"};
+          auto result = ProcessQueries(f(), q);
+          const auto found_docs = result[0];
+          ASSERT_EQUAL(1u, found_docs.size());
+          ASSERT(fabs(found_docs[0].relevance - log(2.0 / 1.0) * 9.0 / 14.0) <
+                 1e-6);
+        }
 
     {
       SearchServer server(""s);
@@ -814,7 +835,7 @@ void TestProcessQueries() {
 }
 
 void TestSearchServer() {
-  RUN_TEST(TestProcessQueries);
+  //RUN_TEST(TestProcessQueries);
   //RUN_TEST(TestParallelMatching);
   //RUN_TEST(TestPFromTask);
   

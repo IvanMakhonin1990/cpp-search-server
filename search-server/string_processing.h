@@ -21,8 +21,7 @@ std::set<std::string, std::less<> > MakeUniqueNonEmptyStrings(const StringContai
   std::set<std::string, std::less<>> non_empty_strings;
   for (const auto &str : strings) {
     if (!str.empty()) {
-      non_empty_strings.insert(std::string(std::move_iterator(str.begin()),
-                                           std::move_iterator(str.end())));
+      non_empty_strings.emplace(str);
     }
   }
   return non_empty_strings;
