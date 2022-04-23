@@ -5,7 +5,7 @@
 #include "request_queue.h"
 #include "string_processing.h"
 #include "paginator.h"
-#include "remove_duplicates.h"
+//#include "remove_duplicates.h"
 #include "test_example_functions.h"
 
 using namespace std;
@@ -49,9 +49,9 @@ int main() {
   search_server.AddDocument( 9, "nasty rat with curly hair"s,
               DocumentStatus::ACTUAL, {1, 2});
 
-  cout << "Before duplicates removed: "s << search_server.GetDocumentCount()
-       << endl;
-  RemoveDuplicates(search_server);
-  cout << "After duplicates removed: "s << search_server.GetDocumentCount()
-       << endl;
+  //cout << "Before duplicates removed: "s << search_server.GetDocumentCount()
+  //     << endl;
+  //RemoveDuplicates(search_server);
+  //cout << "After duplicates removed: "s << search_server.GetDocumentCount()
+  //     << endl;
 }

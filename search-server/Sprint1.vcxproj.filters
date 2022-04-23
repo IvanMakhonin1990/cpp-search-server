@@ -23,6 +23,12 @@
     <ClCompile Include="test_example_functions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="log_duration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="process_queries.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">
@@ -55,6 +61,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="test_example_functions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="log_duration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="process_queries.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
