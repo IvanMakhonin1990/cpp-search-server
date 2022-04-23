@@ -242,6 +242,38 @@ void TestMinusWords() {
   }
 }
 
+void TestMinusWordsP() {
+    {
+        SearchServer server(""s);
+        ASSERT(server.FindTopDocuments(execution::par, "in"s).empty());
+        server.AddDocument(42, "cat in the city"s, DocumentStatus::ACTUAL,
+            { 1, 2, 3 });
+
+        auto found_docs = server.FindTopDocuments("in"s);
+        ASSERT_EQUAL(1U, found_docs.size());
+        ASSERT_EQUAL(42, found_docs[0].id);
+
+        found_docs = server.FindTopDocuments(execution::par, "in -night"s);
+        ASSERT_EQUAL(1U, found_docs.size());
+        ASSERT_EQUAL(42, found_docs[0].id);
+
+        found_docs = server.FindTopDocuments(execution::par, "in -the"s);
+        ASSERT_EQUAL(0U, found_docs.size());
+
+        server.AddDocument(43, "cat in the city night"s, DocumentStatus::ACTUAL,
+            { 1, 2, 3, 4 });
+        server.AddDocument(66, "cat at the city day"s, DocumentStatus::ACTUAL,
+            { 1, 2, 3, 4 });
+
+        found_docs = server.FindTopDocuments(execution::par, "in -night"s);
+        ASSERT_EQUAL(1U, found_docs.size());
+        ASSERT_EQUAL(42, found_docs[0].id);
+        found_docs = server.FindTopDocuments(execution::par, "in -cat"s);
+        ASSERT(found_docs.empty());
+    }
+}
+
+
 void TestMatchingDocuments() {
   {
     LOG_DURATION("M");
@@ -375,6 +407,41 @@ void TestRelevanceSort() {
     }
   }
 }
+void TestRelevanceSortP() {
+    {
+        SearchServer server(""s);
+        server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
+            { 1, 2, 3, 6 });
+        server.AddDocument(1, "cat in the in in in in city night"s,
+            DocumentStatus::ACTUAL, { 1, 2, 3, 4, 9, 8, 7, 6, 5 });
+        server.AddDocument(2,
+            "super cat in in in in in in the in in in city night"s,
+            DocumentStatus::ACTUAL,
+            { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 });
+        server.AddDocument(3, "dog in the city"s, DocumentStatus::ACTUAL,
+            { 10, 2, 3, 1 });
+        server.AddDocument(4, "dog in the in in city in night"s,
+            DocumentStatus::ACTUAL, { 1, 20, 3, 1, 1, 4, 1, 10 });
+        server.AddDocument(5, "super dog in city night super dog in in in city night"s, DocumentStatus::ACTUAL,
+            { 1, 2, 3, 40 });
+        server.AddDocument(6, "super dog city night"s, DocumentStatus::ACTUAL,
+            { 1, 2, 30, 4, 5 });
+        server.AddDocument(7, "super dog in in in city night"s,
+            DocumentStatus::ACTUAL, { 1, 2, 30, 40 });
+        const auto found_docs = server.FindTopDocuments(execution::par, "in"s);
+        ASSERT_EQUAL(5U, found_docs.size());
+
+        ASSERT_EQUAL(2u, found_docs[0].id);
+        ASSERT_EQUAL(1u, found_docs[1].id);
+        ASSERT_EQUAL(4u, found_docs[2].id);
+        ASSERT_EQUAL(0u, found_docs[3].id);
+        ASSERT_EQUAL(7u, found_docs[4].id);
+
+        for (int i = 0; i < static_cast<int>(found_docs.size()) - 1; ++i) {
+            ASSERT(found_docs[i].relevance >= found_docs[i + 1].relevance);
+        }
+    }
+}
 
 void TestAverageValueOfRaiting() {
   {
@@ -394,6 +461,26 @@ void TestAverageValueOfRaiting() {
     ASSERT_EQUAL(average(doc1), found_docs[1].rating);
   }
 }
+
+void TestAverageValueOfRaitingP() {
+    {
+        SearchServer server(""s);
+        auto doc0 = { 1, 2, 3, 6 };
+        server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL, doc0);
+        auto doc1 = { 1, 2, 3, 4, 9, 8, 7, 6, -5 };
+        server.AddDocument(1, "cat in the in in in in city night"s,
+            DocumentStatus::ACTUAL, doc1);
+        auto doc2 = { 1, 2, 3, 4, 5, 6, -7, 8, 9, 10, 11, 12, 13, 14 };
+        server.AddDocument(2,
+            "super cat in in in in in in the in in in city night"s,
+            DocumentStatus::ACTUAL, doc2);
+        const auto found_docs = server.FindTopDocuments(execution::par, "in"s);
+        ASSERT_EQUAL(3u, found_docs.size());
+        ASSERT_EQUAL(average(doc2), found_docs[0].rating);
+        ASSERT_EQUAL(average(doc1), found_docs[1].rating);
+    }
+}
+
 void TestSearchingOfDocumentsByStatus() {
   {
     SearchServer server(""s);
@@ -419,6 +506,33 @@ void TestSearchingOfDocumentsByStatus() {
     ASSERT_EQUAL(1u, found_docs.size());
     ASSERT_EQUAL(7, found_docs[0].id);
   }
+}
+
+void TestSearchingOfDocumentsByStatusP() {
+    {
+        SearchServer server(""s);
+        server.AddDocument(0, "cat in in city"s, DocumentStatus::ACTUAL,
+            { 1, 2, 3, 6 });
+        server.AddDocument(3, "dog in the city"s, DocumentStatus::BANNED,
+            { 10, 2, 3, 1 });
+        server.AddDocument(6, "super dog city night IRRELEVANT"s,
+            DocumentStatus::IRRELEVANT, { 1, 2, 30, 4, 5 });
+
+        auto found_docs =
+            server.FindTopDocuments(execution::par, "IRRELEVANT"s, DocumentStatus::REMOVED);
+        ASSERT(found_docs.empty());
+
+        found_docs =
+            server.FindTopDocuments(execution::par, "IRRELEVANT"s, DocumentStatus::IRRELEVANT);
+        ASSERT_EQUAL(1U, found_docs.size());
+        ASSERT_EQUAL(6, found_docs[0].id);
+
+        server.AddDocument(7, "super dog city night REMOVED"s,
+            DocumentStatus::REMOVED, { 1, 2, 30, 4, 5 });
+        found_docs = server.FindTopDocuments(execution::par, "REMOVED"s, DocumentStatus::REMOVED);
+        ASSERT_EQUAL(1u, found_docs.size());
+        ASSERT_EQUAL(7, found_docs[0].id);
+    }
 }
 
 void TestCalculateRelevance() {
@@ -946,6 +1060,10 @@ void TestSearchServer() {
   //RUN_TEST(TestParallelMatching);
   //RUN_TEST(TestPFromTask);
   
+  RUN_TEST(TestAverageValueOfRaitingP);
+  RUN_TEST(TestSearchingOfDocumentsByStatusP);
+  RUN_TEST(TestRelevanceSortP);
+
   RUN_TEST(TestExceptions);
   RUN_TEST(TestLambda);
   RUN_TEST(TestRemoveDocument);

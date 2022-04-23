@@ -248,33 +248,6 @@ SearchServer::Query SearchServer::ParseQuery(const string_view &text,
   return result;
 }
 
-template <typename ExecutionPolicy, typename ForwardRange, typename Function>
-void ForEach(ExecutionPolicy policy, ForwardRange &range, Function function) {
-  if constexpr (
-      !(is_same_v<
-          random_access_iterator_tag,
-          decay_t<typename iterator_traits<typename ForwardRange::iterator>::
-                      iterator_category>>)&&(is_same_v<decay_t<ExecutionPolicy>,
-                                                       execution::
-                                                           parallel_policy>)) {
-    static constexpr int PART_COUNT = 4;
-    const auto part_length = range.size() / PART_COUNT;
-    auto part_begin = range.begin();
-    auto part_end = next(part_begin, part_length);
-
-    vector<future<void>> futures;
-    for (int i = 0; i < PART_COUNT; ++i, part_begin = part_end, part_end = part_length<
-                 distance(part_begin, range.end())
-             ? next(part_begin, part_length)
-             : next(part_begin, distance(part_begin, range.end()))) {
-      futures.push_back(async([function, part_begin, part_end] {
-        for_each(part_begin, part_end, function);
-      }));
-    }
-  } else {
-    for_each(policy, range.begin(), range.end(), function);
-  }
-}
 
 SearchServer::Query SearchServer::ParseQuery(execution::parallel_policy policy, const string_view &text,
                                              bool skip_sort) const {

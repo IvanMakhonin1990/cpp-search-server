@@ -127,9 +127,14 @@ void TestAddDocumentContent();
 
 void TestMinusWords();
 
+void TestAverageValueOfRaitingP();
+
+void TestSearchingOfDocumentsByStatusP();
+
 void TestMatchingDocuments();
 
 void TestRelevanceSort();
+void TestRelevanceSortP();
 
 void TestRemoveDocument();
 void TestFindPerformance();
