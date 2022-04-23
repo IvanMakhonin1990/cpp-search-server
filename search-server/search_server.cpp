@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <execution>
 #include <deque>
+#include <future>
+#include <functional>
 
 
 #include "log_duration.h"
@@ -148,8 +150,32 @@ vector<Document> SearchServer::FindTopDocuments(string_view raw_query,
                           int rating) { return document_status == status; });
 }
 
+vector<Document> SearchServer::FindTopDocuments(execution::sequenced_policy policy, string_view raw_query,
+                                                DocumentStatus status) const {
+  return FindTopDocuments(raw_query, status);
+}
+
+vector<Document> SearchServer::FindTopDocuments(execution::parallel_policy policy, string_view raw_query,
+                                                DocumentStatus status) const {
+  return FindTopDocuments(policy,
+      raw_query, [status](int document_id, DocumentStatus document_status,
+                          int rating) { return document_status == status; });
+}
+
+
 vector<Document> SearchServer::FindTopDocuments(string_view raw_query) const {
   return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+}
+
+vector<Document> SearchServer::FindTopDocuments(
+    execution::sequenced_policy policy, string_view raw_query) const {
+  return FindTopDocuments(raw_query, DocumentStatus::ACTUAL);
+}
+
+vector<Document>
+SearchServer::FindTopDocuments(execution::parallel_policy policy,
+                               string_view raw_query) const {
+  return FindTopDocuments(policy, raw_query, DocumentStatus::ACTUAL);
 }
 
 bool SearchServer::IsStopWord(const string_view &word) const {
@@ -222,6 +248,79 @@ SearchServer::Query SearchServer::ParseQuery(const string_view &text,
   return result;
 }
 
+template <typename ExecutionPolicy, typename ForwardRange, typename Function>
+void ForEach(ExecutionPolicy policy, ForwardRange &range, Function function) {
+  if constexpr (
+      !(is_same_v<
+          random_access_iterator_tag,
+          decay_t<typename iterator_traits<typename ForwardRange::iterator>::
+                      iterator_category>>)&&(is_same_v<decay_t<ExecutionPolicy>,
+                                                       execution::
+                                                           parallel_policy>)) {
+    static constexpr int PART_COUNT = 4;
+    const auto part_length = range.size() / PART_COUNT;
+    auto part_begin = range.begin();
+    auto part_end = next(part_begin, part_length);
+
+    vector<future<void>> futures;
+    for (int i = 0; i < PART_COUNT; ++i, part_begin = part_end, part_end = part_length<
+                 distance(part_begin, range.end())
+             ? next(part_begin, part_length)
+             : next(part_begin, distance(part_begin, range.end()))) {
+      futures.push_back(async([function, part_begin, part_end] {
+        for_each(part_begin, part_end, function);
+      }));
+    }
+  } else {
+    for_each(policy, range.begin(), range.end(), function);
+  }
+}
+
+SearchServer::Query SearchServer::ParseQuery(execution::parallel_policy policy, const string_view &text,
+                                             bool skip_sort) const {
+  Query result;
+  result.plus_words.reserve(1000);
+  result.minus_words.reserve(1000);
+  auto begin = text.begin();
+  auto it = text.begin();
+  size_t count = 0;
+
+  auto process_word = [&](string_view word) {
+    const auto query_word = ParseQueryWord(word);
+    if (!query_word.is_stop) {
+      if (query_word.is_minus) {
+        result.plus_words.push_back(query_word.data);
+      } else {
+        result.plus_words.push_back(query_word.data);
+      }
+    }
+  };
+
+  while (text.end() != it) {
+    if (*it == ' ') {
+      if (count > 0) {
+        process_word(text.substr(distance(text.begin(), begin), count));
+      }
+      count = 0;
+      begin = it + 1;
+
+    } else {
+      ++count;
+      if (it + 1 == text.end()) {
+        process_word(text.substr(distance(text.begin(), begin), count));
+      }
+    }
+    ++it;
+  }
+  
+  if (!skip_sort) {
+    for (auto *words : {&result.plus_words, &result.minus_words}) {
+      sort(execution::par, words->begin(), words->end());
+      words->erase(unique(execution::par, words->begin(), words->end()), words->end());
+    }
+  }
+  return result;
+}
 
 double SearchServer::ComputeWordInverseDocumentFreq(const string_view &word) const {
   return log(GetDocumentCount() * 1.0 /
@@ -292,9 +391,14 @@ SearchServer::GetWordFrequencies(int document_id) const {
   std::transform(std::execution::par, it->second.begin(), it->second.end(),
                  words_for_erase.begin(),
                  [](const string &word) { return &(word); });*/
+  mutex m;
   std::for_each(std::execution::par, it->second.begin(), it->second.end(),
                 [&](const auto word) {
-                  word_to_document_freqs_[word].erase(document_id);
+                  {
+                    lock_guard<mutex> lock(m);
+                    word_to_document_freqs_[word].erase(document_id);
+                  }
+                  
                 });
   document_ids_.erase(doc_it);
   documents_.erase(document_id);

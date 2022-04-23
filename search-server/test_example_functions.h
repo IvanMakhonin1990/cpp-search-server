@@ -96,7 +96,20 @@ template <typename T> void RunTestImpl(T &func, const std::string &func_name);
 #define RUN_TEST(func) RunTestImpl(func, #func)
 
 #define TEST(processor) Test(#processor, processor, search_server, queries)
+#define TEST_POLICY(policy) Test(#policy, search_server, queries, execution::policy)
 
+template <typename ExecutionPolicy>
+void Test(std::string_view mark, const SearchServer &search_server,
+          const std::vector<std::string> &queries, ExecutionPolicy &&policy) {
+  LOG_DURATION(std::string(mark));
+  double total_relevance = 0;
+  for (const std::string_view query : queries) {
+    for (const auto &document : search_server.FindTopDocuments(policy, query)) {
+      total_relevance += document.relevance;
+    }
+  }
+  std::cout << total_relevance << std::endl;
+}
 
 void AddDocument(SearchServer &search_server, int document_id,
                  const std::string &document, DocumentStatus status,
@@ -119,6 +132,7 @@ void TestMatchingDocuments();
 void TestRelevanceSort();
 
 void TestRemoveDocument();
+void TestFindPerformance();
 
 template <class T> double average(const T &doc3) {
   int s = 0;
