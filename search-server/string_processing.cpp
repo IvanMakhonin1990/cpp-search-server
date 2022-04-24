@@ -23,7 +23,7 @@ void PrintMatchDocumentResult(int document_id, const vector<string_view> &words,
   cout << "}"s << endl;
 }
 
-vector<string_view> SplitIntoWords(const string_view &text) {
+vector<string_view> SplitIntoWords(string_view text) {
   vector<string_view> words;
 
   auto begin = text.begin();

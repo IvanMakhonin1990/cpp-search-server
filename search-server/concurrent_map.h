@@ -17,37 +17,39 @@ public:
     static_assert(std::is_integral_v<Key>,
         "ConcurrentMap supports only integer keys");
 
+    struct Bucket {
+        std::map<Key, Value> map_bucket;
+        std::mutex mutex_bucket;
+    };
+
     struct Access {
         std::lock_guard<std::mutex> guard;
         Value& ref_to_value;
 
-        Access(std::mutex& mut, const size_t& index, const Key& key,
-            std::vector<std::map<Key, Value>>& values)
-            : guard(mut), ref_to_value(values[index][key]) {}
+        Access(Bucket& bucket, const Key& key)
+            : guard(bucket.mutex_bucket), ref_to_value(bucket.map_bucket[key]) {}
     };
 
     explicit ConcurrentMap(size_t bucket_count)
-        : map_buckets_(bucket_count), mutex_buckets_(bucket_count) {}
+        : buckets(bucket_count) {}
 
     Access operator[](const Key& key) {
-        size_t bucket_index = static_cast<size_t>(key) % map_buckets_.size();
-        return Access(mutex_buckets_[bucket_index], bucket_index, key, map_buckets_);
+        size_t bucket_index = static_cast<size_t>(key) % buckets.size();
+        return Access(buckets[bucket_index], key);
     }
 
     std::map<Key, Value> BuildOrdinaryMap() {
 
         std::map<Key, Value> result;
-        for (size_t i = 0; i < map_buckets_.size(); ++i) {
-            std::lock_guard<std::mutex> quard(mutex_buckets_[i]);
-            result.insert(map_buckets_[i].begin(), map_buckets_[i].end());
+        for (size_t i = 0; i < buckets.size(); ++i) {
+            std::lock_guard<std::mutex> quard(buckets[i].mutex_bucket);
+            result.insert(buckets[i].map_bucket.begin(), buckets[i].map_bucket.end());
         }
         return result;
     }
 
 private:
-    std::mutex m;
-    std::vector<std::map<Key, Value>> map_buckets_;
-    std::vector<std::mutex> mutex_buckets_;
-};
+    std::vector<Bucket> buckets;
+ };
 
 

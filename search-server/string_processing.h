@@ -12,7 +12,7 @@ void PrintMatchDocumentResult(int document_id,
                               const std::vector<std::string_view> &words,
                               DocumentStatus status);
 
-std::vector<std::string_view> SplitIntoWords(const std::string_view &text);
+std::vector<std::string_view> SplitIntoWords(std::string_view text);
 
 
 
