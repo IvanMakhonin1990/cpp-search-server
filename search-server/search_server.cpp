@@ -33,7 +33,7 @@ void SearchServer::AddDocument(int document_id, const string_view &document,
   const double inv_word_count = 1.0 / words.size();
   for (const auto &word : words) {
     word_to_document_freqs_[word][document_id] += inv_word_count;
-    doc_to_words_freqs_[document_id].emplace(word);
+    doc_to_words_freqs_[document_id][word] += inv_word_count;
   }
   document_ids_.insert(document_id);
 }
@@ -240,20 +240,14 @@ std::set<int>::const_iterator SearchServer::end() const {
   return document_ids_.end();
 }
 
-map<string_view, double> SearchServer::result = map<string_view, double>();
-
 const map<string_view, double>&
 SearchServer::GetWordFrequencies(int document_id) const {
-  result.clear();
+  static std::map<std::string_view, double> result;
   auto it = doc_to_words_freqs_.find(document_id);
   if (doc_to_words_freqs_.end() != it) {
-    for (const auto &w : it->second) {
-      const auto &p = word_to_document_freqs_.at(w);
-      result[w] += p.at(document_id);
-    }
+    return doc_to_words_freqs_.at(document_id);
   }
-  auto &t = result;
-  return t;
+  return result;
 }
 
  void SearchServer::RemoveDocument(int document_id) {
@@ -264,10 +258,9 @@ SearchServer::GetWordFrequencies(int document_id) const {
   auto it = doc_to_words_freqs_.find(document_id);
   if (doc_to_words_freqs_.end() != it) {
     for (auto w : it->second) {
-      auto t = word_to_document_freqs_[w];
-      word_to_document_freqs_[w].erase(document_id);
-      if (word_to_document_freqs_[w].empty()) {
-        word_to_document_freqs_.erase(w);
+      word_to_document_freqs_[w.first].erase(document_id);
+      if (word_to_document_freqs_[w.first].empty()) {
+        word_to_document_freqs_.erase(w.first);
       }
     }
     doc_to_words_freqs_.erase(document_id);
@@ -283,7 +276,7 @@ SearchServer::GetWordFrequencies(int document_id) const {
 
  void SearchServer::RemoveDocument(std::execution::parallel_policy policy,
                                   int document_id) {
-  auto doc_it = std::find(policy, document_ids_.begin(), document_ids_.end(),
+  auto doc_it = std::find(document_ids_.begin(), document_ids_.end(),
                           document_id);
   if (document_ids_.end() == doc_it) {
     return;
@@ -291,19 +284,25 @@ SearchServer::GetWordFrequencies(int document_id) const {
   
 
   auto it = doc_to_words_freqs_.find(document_id);
-  std::vector<string_view> words_for_erase(it->second.size());
-  std::transform(std::execution::par, it->second.begin(), it->second.end(),
-                 words_for_erase.begin(),
-                 [](string_view word) { return word; });
-  mutex m;
-  std::for_each(std::execution::par, words_for_erase.begin(), words_for_erase.end(),
-                [&](const auto word) {
-                  {
-                    lock_guard<mutex> lock(m);
-                    word_to_document_freqs_[word].erase(document_id);
-                  }
-                  
-                });
+  if (doc_to_words_freqs_.end() != it) {
+    std::vector<string_view> words_for_erase(it->second.size());
+    std::transform(
+        std::execution::par, it->second.begin(), it->second.end(),
+        words_for_erase.begin(),
+        [](std::pair<std::string_view, double> word) { return word.first; });
+    mutex m;
+    std::for_each(std::execution::par, words_for_erase.begin(),
+                  words_for_erase.end(), [&](const auto word) {
+                    {
+                      lock_guard<mutex> lock(m);
+                      word_to_document_freqs_[word].erase(document_id);
+                      if (word_to_document_freqs_[word].empty()) {
+                        word_to_document_freqs_.erase(word);
+                      }
+                    }
+                  });
+    doc_to_words_freqs_.erase(document_id);
+  }
   document_ids_.erase(doc_it);
   documents_.erase(document_id);
  }
